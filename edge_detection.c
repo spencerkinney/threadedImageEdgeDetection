@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 #define BLURFACTOR 90.0
+#define VERBOSE 1
 
 typedef struct {
   u_int8_t red;
@@ -11,11 +12,11 @@ typedef struct {
   u_int8_t blue;
 } Pixel;
 
-void convert_grayscale(int width, int height, Pixel image[height][width]);
+void convert_grayscale(int width, int height, Pixel image[height][width]); //completed
 
-void apply_gaussian_blur(int width, int height, Pixel image[height][width]);
+void apply_gaussian_blur(int width, int height, Pixel image[height][width]); //completed
 
-void apply_sobel_filters(int width, int height, Pixel image[height][width]);
+void apply_sobel_filters(int width, int height, Pixel image[height][width]); //completed
 
 void apply_non_max_supression(int width, int height,
                               Pixel image[height][width]);
@@ -70,14 +71,31 @@ int main(int argc, char *argv[]) {
     fseek(in, padding, SEEK_CUR);
   }
 
+  double start,elapsed;
+  double total = 0.0;
   // Convert image to grayscale
+  start = omp_get_wtime();
   convert_grayscale(width, height, image);
-
+  elapsed = omp_get_wtime() - start;
+  total += elapsed;
+  if (VERBOSE) {printf("CONVERT_TO_GRAYSCALE EXEC TIME: %fs\n", elapsed);}
+  
   // Gaussian Blur
+  
+  start = omp_get_wtime();
   apply_gaussian_blur(width, height, image);
+  elapsed = omp_get_wtime() - start;
+  total += elapsed;
+  if (VERBOSE) {printf("APPLY_GAUSSIAN_BLUR EXEC TIME: %fs\n", elapsed);}
 
   // Gradient Calculation
+  start = omp_get_wtime();
   apply_sobel_filters(width, height, image);
+  elapsed = omp_get_wtime() - start;
+  total += elapsed;
+  if (VERBOSE) {printf("APPLY_SOBEL_FILTER EXEC TIME: %fs\n", elapsed);}
+
+  printf("TOTAL EXEC TIME: %fs\n", total);
 
   // Edge Detection
 
@@ -113,6 +131,7 @@ void apply_gaussian_blur(int width, int height, Pixel image[height][width]) {
 
     for (int i = 0; i < height; i++) {
         for ( int j = 0; j < width; j++) {
+          //#pragma
             for ( int k = -1; k < 2; k++) {
                 for ( int l = -1; l < 2; l++) {
                     if (i + k >= 0 && j + l >= 0 && i + k < height && j + l < width) {
@@ -144,75 +163,63 @@ void apply_gaussian_blur(int width, int height, Pixel image[height][width]) {
     }
 }
 
-
-// http://www.cs.ucr.edu/~jtarango/cs122a_project.html
-//https://github.com/fzehracetin/sobel-edge-detection-in-c/blob/main/sobel_edge_detection.c
 void apply_sobel_filters(int width, int height, Pixel image[height][width]) {
-  int kernelx[3][3] = {{-1,0,1}, {-2,0,2}, {-1,0,1}};
-  
 
-  for (int i = 1; i < height-1; i++) {
-    for (int j = 1; j < width-1; j++) {
-      Pixel magX;
-      for (int k = 0; k < 3; k++) {
-        for (int l = 0; l < 3; l++) {
-          magX = image[height - 1 - k][width - 1 + l];
-          magX.red *= kernelx[k][l];
-          magX.green *= kernelx[k][l];
-          magX.blue *= kernelx[k][l];
+    Pixel updated[height][width];
+    int color_coords[6];
+    int Gx[3][3] = {{-1, 0, 1}, {-2, 0, 2}, {-1, 0, 1}};
+    int Gy[3][3] = {{1, 2, 1}, {0, 0, 0}, {-1, -2, -1}};
+
+
+    for (int i=0; i<height; i++) {
+        for (int j=0; j<width; j++) {
+            for ( int k = -1; k < 2; k++) {
+                for ( int l = -1; l < 2; l++) {
+                    if (i + k >= 0 && j + l >= 0 && i + k < height && j + l < width) {
+                        color_coords[0] += image[i + k][j + l].red * Gx[k + 1][l + 1];
+                        color_coords[4] += image[i + k][j + l].blue * Gx[k + 1][l + 1];
+                        color_coords[2] += image[i + k][j + l].green * Gx[k + 1][l + 1];
+
+                        color_coords[1] += image[i + k][j + l].red * Gy[k + 1][l + 1];
+                        color_coords[5] += image[i + k][j + l].blue * Gy[k + 1][l + 1];
+                        color_coords[3] += image[i + k][j + l].green * Gy[k + 1][l + 1];
+                    }
+                }
+            }
+            int a = round(sqrt((pow(color_coords[0], 2) + pow(color_coords[1], 2))));
+            int b = round(sqrt((pow(color_coords[4], 2) + pow(color_coords[5], 2))));
+            int c = round(sqrt((pow(color_coords[2], 2) + pow(color_coords[3], 2))));
+
+            for (int idx = 0; idx < 6; idx++) {
+              color_coords[idx] = 0;
+            }
+
+            if (a > 255) {
+                a = 255;
+            }
+            if (b > 255) {
+                b = 255;
+            }
+            if (c > 255) {
+                c = 255;
+            }
+
+            updated[i][j].red = a;
+            updated[i][j].blue = b;
+            updated[i][j].green = c;
         }
-      }
-      image[i][j].red = magX.red;
-      image[i][j].green = magX.green;
-      image[i][j].blue = magX.blue;
-      
     }
-  }
+    for (int a = 0; a < height; a++)
+    {
+        for (int b = 0; b < width; b++)
+        {
+            image[a][b] = updated[a][b];
+        }
+    }
+    return;
 }
 
 void apply_non_max_supression(int width, int height, Pixel image[height][width]) {
 
   int Z[width][height];
 }
-
-
-
-// def non_max_suppression(img, D):
-//     M, N = img.shape
-//     Z = np.zeros((M,N), dtype=np.int32)
-//     angle = D * 180. / np.pi
-//     angle[angle < 0] += 180
-
-    
-//     for i in range(1,M-1):
-//         for j in range(1,N-1):
-//             try:
-//                 q = 255
-//                 r = 255
-                
-//                #angle 0
-//                 if (0 <= angle[i,j] < 22.5) or (157.5 <= angle[i,j] <= 180):
-//                     q = img[i, j+1]
-//                     r = img[i, j-1] 
-//                 #angle 45
-//                 elif (22.5 <= angle[i,j] < 67.5):
-//                     q = img[i+1, j-1]
-//                     r = img[i-1, j+1]
-//                 #angle 90
-//                 elif (67.5 <= angle[i,j] < 112.5):
-//                     q = img[i+1, j]
-//                     r = img[i-1, j]
-//                 #angle 135
-//                 elif (112.5 <= angle[i,j] < 157.5):
-//                     q = img[i-1, j-1]
-//                     r = img[i+1, j+1]
-
-//                 if (img[i,j] >= q) and (img[i,j] >= r):
-//                     Z[i,j] = img[i,j]
-//                 else:
-//                     Z[i,j] = 0
-
-//             except IndexError as e:
-//                 pass
-    
-//     return Z
