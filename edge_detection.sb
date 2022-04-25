@@ -15,11 +15,11 @@ module load cpu
 
 
 #run the job
-./edge_detection.c in/bike.bmp bike_output_1.bmp 1
-./edge_detection.c in/bike.bmp bike_output_2.bmp 2
-./edge_detection.c in/bike.bmp bike_output_4.bmp 4
-./edge_detection.c in/bike.bmp bike_output_8.bmp 8
-./edge_detection.c in/bike.bmp bike_output_32.bmp 32
-./edge_detection.c in/bike.bmp bike_output_64.bmp 64
-./edge_detection.c in/bike.bmp bike_output_128.bmp 128
-./edge_detection.c in/bike.bmp bike_output_256.bmp 256
+./edge_detection in/bike.bmp bike_output_1.bmp 1
+./edge_detection in/bike.bmp bike_output_2.bmp 2
+./edge_detection in/bike.bmp bike_output_4.bmp 4
+./edge_detection in/bike.bmp bike_output_8.bmp 8
+./edge_detection in/bike.bmp bike_output_8.bmp 16
+./edge_detection in/bike.bmp bike_output_32.bmp 32
+./edge_detection in/bike.bmp bike_output_64.bmp 64
+

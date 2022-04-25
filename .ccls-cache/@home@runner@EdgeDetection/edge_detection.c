@@ -12,28 +12,22 @@ typedef struct {
   u_int8_t blue;
 } Pixel;
 
+// Function to convert the image to grayscale
 void convert_grayscale(int width, int height,
-                       Pixel image[height][width]); // completed
+                       Pixel image[height][width]);
 
+// Function to aply gaussian blur
 void apply_gaussian_blur(int width, int height,
-                         Pixel image[height][width]); // completed
+                         Pixel image[height][width]);
 
-void apply_sobel_filters(int width, int height,
-                         Pixel image[height][width]); // completed
-
-void apply_non_max_supression(int width, int height,
-                              Pixel image[height][width]);
-
-void calculate_edge_correlation(int width, int height,
-                                Pixel image[height][width]);
-
-void edge_tracking_hysteresis(int width, int height,
-                              Pixel image[height][width]);
+void apply_edge_gradient(int width, int height,
+                         Pixel image[height][width]);
 
 int main(int argc, char *argv[]) {
   char *in_name, *out_name;
   int num_threads;
 
+  // Make sure correct number of arguments entered
   if (argc != 4) {
     fprintf(stderr, "Incorrect number of command line inputs\n");
     exit(1);
@@ -44,9 +38,10 @@ int main(int argc, char *argv[]) {
   out_name = argv[2];
   num_threads = atoi(argv[3]);
 
+  // Set number of threads
   omp_set_num_threads(num_threads);
 
-  // Create files... Should take from command line input eventually
+  // Create/open files
   FILE *in = fopen(in_name, "rb");
   FILE *out = fopen(out_name, "wb");
   if (!in || !out) {
@@ -74,9 +69,12 @@ int main(int argc, char *argv[]) {
     fseek(in, padding, SEEK_CUR);
   }
 
-  printf("Using %d threads\n", num_threads);
+  printf("Using %d threads\n", num_threads);  
+
+  // Time 
   double start, elapsed;
   double total = 0.0;
+  
   // Convert image to grayscale
   start = omp_get_wtime();
   convert_grayscale(width, height, image);
@@ -87,7 +85,6 @@ int main(int argc, char *argv[]) {
   }
 
   // Gaussian Blur
-
   start = omp_get_wtime();
   apply_gaussian_blur(width, height, image);
   elapsed = omp_get_wtime() - start;
@@ -98,7 +95,7 @@ int main(int argc, char *argv[]) {
 
   // Gradient Calculation
   start = omp_get_wtime();
-  apply_sobel_filters(width, height, image);
+  apply_edge_gradient(width, height, image);
   elapsed = omp_get_wtime() - start;
   total += elapsed;
   if (VERBOSE) {
@@ -125,7 +122,8 @@ int main(int argc, char *argv[]) {
 
 void convert_grayscale(int width, int height, Pixel image[height][width]) {
   int i, j;
-#pragma omp parallel for private(i, j) shared(image)
+  
+  #pragma omp parallel for private(i, j) shared(image)
   for (i = 0; i < height; i++) {
     for (j = 0; j < width; j++) {
       int x = (image[i][j].red + image[i][j].green + image[i][j].blue) / 3;
@@ -141,7 +139,8 @@ void apply_gaussian_blur(int width, int height, Pixel image[height][width]) {
   float avg = 0;
   float rgb[3] = {0, 0, 0};
   int i, j, k, l;
-#pragma omp parallel for private(i, j, k, l, avg) shared(image) reduction(+ : rgb)
+  
+  #pragma omp parallel for private(i, j, k, l, avg) shared(image) reduction(+ : rgb)
   for (i = 0; i < height; i++) {
     for (j = 0; j < width; j++) {
       //#pragma
@@ -176,7 +175,7 @@ void apply_gaussian_blur(int width, int height, Pixel image[height][width]) {
   }
 }
 
-void apply_sobel_filters(int width, int height, Pixel image[height][width]) {
+void apply_edge_gradient(int width, int height, Pixel image[height][width]) {
 
   Pixel updated[height][width];
   int color_coords[6];
@@ -184,56 +183,46 @@ void apply_sobel_filters(int width, int height, Pixel image[height][width]) {
   int Gy[3][3] = {{1, 2, 1}, {0, 0, 0}, {-1, -2, -1}};
   int i, j, k, l;
   
-#pragma omp parallel for private(i,j,k,l) shared(image) reduction(+:color_coords)
-
+  #pragma omp parallel for private(i,j,k,l) shared(image) reduction(+:color_coords)
   for (i = 0; i < height; i++) {
     for (j = 0; j < width; j++) {
       for (k = -1; k < 2; k++) {
         for (l = -1; l < 2; l++) {
           if (i + k >= 0 && j + l >= 0 && i + k < height && j + l < width) {
-            color_coords[0] += image[i + k][j + l].red * Gx[k + 1][l + 1];
-            color_coords[4] += image[i + k][j + l].blue * Gx[k + 1][l + 1];
-            color_coords[2] += image[i + k][j + l].green * Gx[k + 1][l + 1];
+            color_coords[0] += image[i + k][j + l].red * Gx[k + 1][l + 1]; // Red x
+            color_coords[1] += image[i + k][j + l].red * Gy[k + 1][l + 1]; // Red y
+            
+            color_coords[2] += image[i + k][j + l].green * Gx[k + 1][l + 1]; // Green x
+            color_coords[3] += image[i + k][j + l].green * Gy[k + 1][l + 1]; // Green y
 
-            color_coords[1] += image[i + k][j + l].red * Gy[k + 1][l + 1];
-            color_coords[5] += image[i + k][j + l].blue * Gy[k + 1][l + 1];
-            color_coords[3] += image[i + k][j + l].green * Gy[k + 1][l + 1];
+            color_coords[4] += image[i + k][j + l].blue * Gx[k + 1][l + 1]; // Blue x
+            color_coords[5] += image[i + k][j + l].blue * Gy[k + 1][l + 1]; // Blue y
           }
         }
       }
-      int a = round(sqrt((pow(color_coords[0], 2) + pow(color_coords[1], 2))));
-      int b = round(sqrt((pow(color_coords[4], 2) + pow(color_coords[5], 2))));
-      int c = round(sqrt((pow(color_coords[2], 2) + pow(color_coords[3], 2))));
+      
+      int red = round(sqrt((pow(color_coords[0], 2) + pow(color_coords[1], 2))));
+      red = red > 255 ? 255 : red;
+      updated[i][j].red = red;
+      
+      int green = round(sqrt((pow(color_coords[2], 2) + pow(color_coords[3], 2))));
+      green = green > 255 ? 255 : green;
+      updated[i][j].green = green;
+      
+      int blue = round(sqrt((pow(color_coords[4], 2) + pow(color_coords[5], 2))));
+      blue = blue > 255 ? 255 : blue;
+      updated[i][j].blue = blue;
 
       for (int idx = 0; idx < 6; idx++) {
         color_coords[idx] = 0;
       }
-
-      if (a > 255) {
-        a = 255;
-      }
-      if (b > 255) {
-        b = 255;
-      }
-      if (c > 255) {
-        c = 255;
-      }
-
-      updated[i][j].red = a;
-      updated[i][j].blue = b;
-      updated[i][j].green = c;
     }
   }
+
+  // Make image array equal updated array
   for (int a = 0; a < height; a++) {
     for (int b = 0; b < width; b++) {
       image[a][b] = updated[a][b];
     }
   }
-  return;
-}
-
-void apply_non_max_supression(int width, int height,
-                              Pixel image[height][width]) {
-
-  int Z[width][height];
 }
